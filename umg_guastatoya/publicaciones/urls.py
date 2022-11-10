@@ -3,7 +3,8 @@ from rest_framework import routers
 
 from publicaciones.views import (
     ClasificacionViewSet,
-    PublicacionViewSet
+    PublicacionViewSet,
+    PublicacionListView
 )
 
 app_name = 'publicaciones'
@@ -14,4 +15,5 @@ router.register('publicaciones', PublicacionViewSet, basename='publicaciones')
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('publicaciones-paginadas/', PublicacionListView.as_view(), name='publicaciones-paginadas')
 ]

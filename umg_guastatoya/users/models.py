@@ -11,11 +11,12 @@ class Profile(models.Model):
     (2, 'Profesor'),
     (3, 'Estudiante'),
   ])
+  raw_password = models.CharField(max_length=250, null=True, blank=True)
 
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
   if created:
-    Profile.objects.create(user=instance, tipo=1)
+    Profile.objects.create(user=instance, tipo=3)
 
 @receiver(post_save, sender=User)
 def save_user_profile(sender, instance, **kwargs):

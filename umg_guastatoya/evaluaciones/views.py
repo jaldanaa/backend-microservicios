@@ -5,6 +5,11 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 
 from rest_framework.permissions import IsAuthenticated
+from .permissions import (
+    HasEditEvaluationPermission,
+    HasSolveEvaluationPermission,
+    HasCreateEvaluationPermission,
+)
 
 from evaluaciones.serializers import EvaluacionSerializer, CursoSerializer, EvaluacionResueltaSerializer
 from evaluaciones.models import (
@@ -17,6 +22,10 @@ from evaluaciones.models import (
 )
 from django.contrib.auth.models import User
 
+from django.shortcuts import get_object_or_404
+from django.core.exceptions import PermissionDenied
+
+
 
 class CursoViewSet(ModelViewSet):
     serializer_class = CursoSerializer
@@ -24,20 +33,68 @@ class CursoViewSet(ModelViewSet):
     permission_classes = (IsAuthenticated, )
 
 
+def solved_evaluation(available_evaluations_list, solved_evaluations_list):
+    queryset = []
+    for ae in available_evaluations_list:
+        already_solved = False
+        for se in solved_evaluations_list:
+            if ae.id == se.evaluacion.id: already_solved = True
+        if not already_solved: queryset.append(ae)
+    return queryset
+
+
+def get_evaluaciones_queryset(user, user_type):
+    if user_type == 1:
+        queryset = Evaluacion.objects.all()
+    if user_type == 2:
+        queryset = Evaluacion.objects.filter(catedratico=user)
+    if user_type == 3:
+        evaluaciones_resueltas = EvaluacionResuelta.objects.filter(estudiante=user)
+        evaluaciones_disponibles = Evaluacion.objects.all()
+        queryset = solved_evaluation(evaluaciones_disponibles, evaluaciones_resueltas)
+    return queryset
+
+
 class EvaluacionList(ListAPIView):
     serializer_class = EvaluacionSerializer
-    queryset = Evaluacion.objects.all()
-    permission_classes = (IsAuthenticated, )
+    permission_classes = (IsAuthenticated,)
 
+    def get_queryset(self):
+        user_type = self.request.user.profile.tipo
+        user = self.request.user
+        return get_evaluaciones_queryset(user, user_type)
+        
 
 class EvaluacionRetrieve(RetrieveAPIView):
     serializer_class = EvaluacionSerializer
+    permission_classes = (IsAuthenticated,)
     queryset = Evaluacion.objects.all()
-    permission_classes = (IsAuthenticated, )
+
+    def get_object(self):
+        obj = get_object_or_404(self.get_queryset(), pk=self.kwargs['pk'])
+        self.check_object_permissions(self.request, obj)
+        return obj
+
+    def check_object_permissions(self, request, obj):
+        user_type = request.user.profile.tipo
+        user = request.user
+        permission_denied = False
+        if user_type == 1:
+            return True
+        if user_type == 2 and user.id != obj.catedratico.id:
+            permission_denied = True
+        if user_type == 3:
+            queryset = []
+            solved_by_student = EvaluacionResuelta.objects.filter(estudiante=user)
+            permission_denied = False
+            for sbs in solved_by_student:
+                if obj.id == sbs.evaluacion.id: permission_denied = True
+        if permission_denied:
+            raise PermissionDenied()
 
 
 class CreateEvaluacionAPIView(APIView):
-    permission_classes = (IsAuthenticated, )
+    permission_classes = (IsAuthenticated, HasCreateEvaluationPermission)
 
     def post(self, request, *args, **kwargs):
         evaluacion_data = request.data
@@ -72,7 +129,7 @@ class CreateEvaluacionAPIView(APIView):
 
 
 class UpdateEvaluacionAPIView(APIView):
-    permission_classes = (IsAuthenticated, )
+    permission_classes = (IsAuthenticated, HasEditEvaluationPermission)
 
     def post(self, request, *args, **kwargs):
         evaluacion_data = request.data
@@ -102,7 +159,7 @@ class UpdateEvaluacionAPIView(APIView):
 
 
 class SolveEvaluacionAPIView(APIView):
-    permission_classes = (IsAuthenticated, )
+    permission_classes = (IsAuthenticated, HasSolveEvaluationPermission)
 
     def post(self, request, *args, **kwargs):
         data = request.data
@@ -131,11 +188,24 @@ class SolveEvaluacionAPIView(APIView):
 
 class SolvedEvaluacionesListAPIView(ListAPIView):
     serializer_class = EvaluacionResueltaSerializer
-    queryset = EvaluacionResuelta.objects.all()
     permission_classes = (IsAuthenticated, )
+
+    def get_queryset(self):
+        return solved_evaluations(self.request.user.profile.tipo, self.request.user)
 
 
 class SolvedEvaluacionesRetrieveAPIView(RetrieveAPIView):
     serializer_class = EvaluacionResueltaSerializer
-    queryset = EvaluacionResuelta.objects.all()
     permission_classes = (IsAuthenticated, )
+
+    def get_queryset(self):
+        return solved_evaluations(self.request.user.profile.tipo, self.request.user)
+
+
+def solved_evaluations(user_type, user):
+    if user_type == 1:
+        return EvaluacionResuelta.objects.all()
+    if user_type == 2:
+        return EvaluacionResuelta.objects.filter(evaluacion__catedratico=user)
+    if user_type == 3:
+        return EvaluacionResuelta.objects.filter(estudiante=user)
