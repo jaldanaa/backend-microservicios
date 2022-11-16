@@ -83,9 +83,12 @@ WSGI_APPLICATION = 'umg_guastatoya.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
-        'ATOMIC_REQUEST': True,
+        'ENGINE': 'django.db.backends.postgresql_psycopg2',
+        'NAME': 'torraAltaApp', 
+        'USER': 'adminJoni',
+        'PASSWORD': 'jonathanAldana22',
+        'HOST': 'db-torrealta.co8gza6egemx.us-east-1.rds.amazonaws.com', 
+        'PORT': '5432',
     }
 }
 
